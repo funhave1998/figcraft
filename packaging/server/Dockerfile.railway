@@ -1,0 +1,17 @@
+# figcraft-server for Railway: same as Dockerfile, without the storage instruction
+# Railway refuses (attach /data from the Railway dashboard instead).
+FROM rust:1-bookworm AS build
+WORKDIR /src
+COPY . .
+RUN cargo build --release --locked -p figcraft-server \
+ && mkdir -p /out/data \
+ && printf 'listen = "0.0.0.0:47900"\ndata = "/data"\npublic_url = "wss://figcraft-production-51d119a2.up.railway.app/"\n' > /out/server.toml
+
+FROM gcr.io/distroless/cc-debian12:nonroot
+COPY --from=build /src/target/release/figcraft-server /usr/local/bin/figcraft-server
+COPY --from=build /out/server.toml /etc/figcraft-server/server.toml
+COPY --from=build --chown=nonroot:nonroot /out/data /data
+USER nonroot
+EXPOSE 47900
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/usr/local/bin/figcraft-server", "--config", "/etc/figcraft-server/server.toml"]
